@@ -101,34 +101,37 @@ export default function NewMailTool() {
   };
 
   const parseMimePart = (raw: string): any => {
-    const sepMatch = raw.match(/\r?\n\r?\n/);
-    let headerBlock, body;
-    if (sepMatch) {
-      headerBlock = raw.slice(0, sepMatch.index);
-      body = raw.slice(sepMatch.index + sepMatch[0].length);
-    } else {
-      headerBlock = raw;
-      body = "";
-    }
-    const headers = parseHeaders(headerBlock);
-    const ct = parseContentType(headers["content-type"]);
+  const sepMatch = raw.match(/\r?\n\r?\n/);
+  let headerBlock, body;
+  
+  // ▼ ここに && sepMatch.index !== undefined を追加します
+  if (sepMatch && sepMatch.index !== undefined) {
+    headerBlock = raw.slice(0, sepMatch.index);
+    body = raw.slice(sepMatch.index + sepMatch[0].length);
+  } else {
+    headerBlock = raw;
+    body = "";
+  }
+  
+  const headers = parseHeaders(headerBlock);
+  const ct = parseContentType(headers["content-type"]);
 
-    if (ct.type.startsWith("multipart/") && ct.params.boundary) {
-      const segments = body.split("--" + ct.params.boundary);
-      const partsRaw = segments.slice(1, -1);
-      const children = partsRaw.map(p => p.replace(/^\r?\n/, "")).filter(p => p.trim().length > 0).map(p => parseMimePart(p));
-      return { headers, type: ct.type, children };
-    }
+  if (ct.type.startsWith("multipart/") && ct.params.boundary) {
+    const segments = body.split("--" + ct.params.boundary);
+    const partsRaw = segments.slice(1, -1);
+    const children = partsRaw.map(p => p.replace(/^\r?\n/, "")).filter(p => p.trim().length > 0).map(p => parseMimePart(p));
+    return { headers, type: ct.type, children };
+  }
 
-    const cte = String(headers["content-transfer-encoding"] || "7bit").toLowerCase().trim();
-    let bytes;
-    if (cte === "base64") bytes = base64ToBytes(body);
-    else if (cte === "quoted-printable") bytes = decodeQuotedPrintable(body);
-    else bytes = Uint8Array.from(body, c => c.charCodeAt(0) & 0xff);
+  const cte = String(headers["content-transfer-encoding"] || "7bit").toLowerCase().trim();
+  let bytes;
+  if (cte === "base64") bytes = base64ToBytes(body);
+  else if (cte === "quoted-printable") bytes = decodeQuotedPrintable(body);
+  else bytes = Uint8Array.from(body, c => c.charCodeAt(0) & 0xff);
 
-    const isText = ct.type.startsWith("text/");
-    return { headers, type: ct.type, bytes, text: isText ? decodeBytes(bytes, ct.params.charset || "utf-8") : null };
-  };
+  const isText = ct.type.startsWith("text/");
+  return { headers, type: ct.type, bytes, text: isText ? decodeBytes(bytes, ct.params.charset || "utf-8") : null };
+};
 
   const findPart = (node: any, wantType: string): any => {
     if (!node) return null;
